@@ -312,15 +312,6 @@ models<-data.frame(t(models))
 models
 models.validation
 
-write.xlsx(models, file = "empty1.xlsx",
-           sheetName = "USA-ARRESTS", append = FALSE)
-
-# ante diferentes corridas los modelos son muy diferentes e igualmente los resultados.
-
-# seleccion de variables -------------------------------------------
-
-# particionamos la muestra para buscar consistencia en las variables con PIP > 0.5 con bic.glm para el proceso de seleccion de variables
-
 pip<-matrix(0,50,5)
 for(i in 1:5) {
   ind_train <- sample(1:nrow(df), size = round(0.8*nrow(df)))
@@ -344,8 +335,7 @@ pip
 
 # variables seleccionadas
 
-#seleccion<-c(10,13,20,23,25,31) #1er corrida
-seleccion<-c(6,7,10,11,15,16,18,49) #2da corrida se elimina x20 menor a 0.7
+seleccion<-c(6,7,10,11,15,16,18,49)
 
 M <- cor(df[,seleccion+2])
 col<- colorRampPalette(c("Blue"))
@@ -377,26 +367,21 @@ ridge.model.pre <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.ridge.p
 
 coef(ridge.model.pre)
 
-
 #  variables definitivas PIP ------------------------------------------
 
-seleccion<-c(23,25,31)
+seleccion<-c(6,7,11,15,49)
 
 #### Cross Validation modelos definitivos
 
 fold<-5
-folding <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
-
-continuous_transformation <- function(x) {
-  if (x <= -1) {0} else {1}
-}
 
 y.all <- df[,2]
 x.all <- scale(df[,seleccion+2])
 
 # lasso test
 mse.test.lasso<-matrix(0,fold,1)
-accuracy.test.lasso<-matrix(0,fold,1)
+mse.test.total.lasso<-matrix(0,fold,100)
+
 
 cv.lasso2 <- cv.glmnet(x.all, y.all, family = "gaussian", nfold = fold, type.measure = "mse", parallel = TRUE, alpha = 1,standardize = FALSE)
 lasso.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
@@ -404,43 +389,46 @@ lasso.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.lasso2$lam
 y.predict.lasso2 <- predict(lasso.model2, x.all)
 mselasso <- mse(y.predict.lasso2, y.all)
 
-y.transf.predict.lasso2 <- unlist(lapply(as.vector(y.predict.lasso2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.lasso2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-acclasso <- accuracy(y.transf.sample.lasso2, y.transf.predict.lasso2)
-
-for(i in 1:fold) {
-  idx.train<-folding$train[[i]]$idx
-  x.train<-df[idx.train,seleccion+2]
-  x.test<-df[-idx.train,seleccion+2]
+for (j in 1:100) {
+  folding <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
   
-  y.train<-df[idx.train,2]
-  y.test<-df[-idx.train,2]
-  
-  x.train.mean <- apply(x.train, 2, mean)
-  x.train.variances <- apply(x.train, 2, sd)
-  
-  x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
-  x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
-  x.train<-data.matrix(x.train)
-  
-  x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
-  x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
-  x.test<-data.matrix(x.test)
-  
-  
-  lasso.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
-  
-  y.predict.lasso.test <- predict(lasso.model.train, x.test)
-  mse.test.lasso[i] <- mse(y.predict.lasso.test, y.test)
-  
-  y.trans.predict.lasso.test <- unlist(lapply(as.vector(y.predict.lasso.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.trans.sample.lasso.test <- unlist(lapply(y.test, function(x) continuous_transformation(x) ), use.names = FALSE)
-  accuracy.test.lasso[i] <- accuracy(y.trans.sample.lasso.test, y.trans.predict.lasso.test)
+  for(i in 1:fold) {
+    idx.train<-folding$train[[i]]$idx
+    x.train<-df[idx.train,seleccion+2]
+    x.test<-df[-idx.train,seleccion+2]
+    
+    y.train<-df[idx.train,2]
+    y.test<-df[-idx.train,2]
+    
+    x.train.mean <- apply(x.train, 2, mean)
+    x.train.variances <- apply(x.train, 2, sd)
+    
+    x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
+    x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
+    x.train<-data.matrix(x.train)
+    
+    x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
+    x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
+    x.test<-data.matrix(x.test)
+    
+    lasso.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
+    
+    y.predict.lasso.test <- predict(lasso.model.train, x.test)
+    mse.test.lasso[i] <- mse(y.predict.lasso.test, y.test)
+    
+    mse.test.total.lasso[i,j] <- mse(y.predict.lasso.test, y.test)
+  }
 }
+
+colMeans(mse.test.total.lasso)
+
+mean(colMeans(mse.test.total.lasso))
+
+sd(colMeans(mse.test.total.lasso))
 
 # ridge test
 mse.test.ridge<-matrix(0,fold,1)
-accuracy.test.ridge<-matrix(0,fold,1)
+mse.test.total.ridge<-matrix(0,fold,100)
 
 cv.ridge2 <- cv.glmnet(x.all, y.all, family = "gaussian", nfold = fold, type.measure = "mse", parallel = TRUE, alpha = 0,standardize = FALSE)
 ridge.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.ridge2$lambda.min, alpha = 0,standardize = FALSE)
@@ -448,43 +436,48 @@ ridge.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.ridge2$lam
 y.predict.ridge2 <- predict(ridge.model2, x.all)
 mseridge <- mse(y.predict.ridge2, y.all)
 
-y.transf.predict.ridge2 <- unlist(lapply(as.vector(y.predict.ridge2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.ridge2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-accridge <- accuracy(y.transf.sample.ridge2, y.transf.predict.ridge2)
-
-for(i in 1:fold) {
-  idx.train<-folding$train[[i]]$idx
-  x.train<-df[idx.train,seleccion+2]
-  x.test<-df[-idx.train,seleccion+2]
-  
-  y.train<-df[idx.train,2]
-  y.test<-df[-idx.train,2]
-  
-  x.train.mean <- apply(x.train, 2, mean)
-  x.train.variances <- apply(x.train, 2, sd)
-  
-  x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
-  x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
-  x.train<-data.matrix(x.train)
-  
-  x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
-  x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
-  x.test<-data.matrix(x.test)
-  
-  
-  ridge.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.ridge2$lambda.min, alpha = 0,standardize = FALSE)
-  
-  y.predict.ridge.test <- predict(ridge.model.train, x.test)
-  mse.test.ridge[i] <- mse(y.predict.ridge.test, y.test)
-  
-  y.trans.predict.ridge.test <- unlist(lapply(as.vector(y.predict.ridge.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.trans.sample.ridge.test <- unlist(lapply(y.test, function(x) continuous_transformation(x) ), use.names = FALSE)
-  accuracy.test.ridge[i] <- accuracy(y.trans.sample.ridge.test, y.trans.predict.ridge.test)
+for (j in 1: 100) {
+  folding.ridge <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
+    for(i in 1:fold) {
+    idx.train<-folding.ridge$train[[i]]$idx
+    x.train<-df[idx.train,seleccion+2]
+    x.test<-df[-idx.train,seleccion+2]
+    
+    y.train<-df[idx.train,2]
+    y.test<-df[-idx.train,2]
+    
+    x.train.mean <- apply(x.train, 2, mean)
+    x.train.variances <- apply(x.train, 2, sd)
+    
+    x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
+    x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
+    x.train<-data.matrix(x.train)
+    
+    x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
+    x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
+    x.test<-data.matrix(x.test)
+    
+    
+    ridge.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.ridge2$lambda.min, alpha = 0,standardize = FALSE)
+    
+    y.predict.ridge.test <- predict(ridge.model.train, x.test)
+    mse.test.ridge[i] <- mse(y.predict.ridge.test, y.test)
+    mse.test.total.ridge[i,j] <- mse(y.predict.ridge.test, y.test)
+  }
 }
+
+colMeans(mse.test.total.ridge)
+
+mean(colMeans(mse.test.total.ridge))
+
+sd(colMeans(mse.test.total.ridge))
+
+# elasticnet test
+# elasticnet test
 
 # elasticnet test
 mse.test.elasticnet<-matrix(0,fold,1)
-accuracy.test.elasticnet<-matrix(0,fold,1)
+mse.test.total.elasticnet<-matrix(0,fold,100)
 
 a <- seq(0.1, 0.9, 0.05)
 search2 <- foreach(j = a, .combine = rbind) %dopar% {
@@ -497,46 +490,49 @@ elasticnet.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.optim
 y.predict.elasticnet2 <- predict(elasticnet.model2, x.all)
 mselasticnet <- mse(y.predict.elasticnet2, y.all)
 
-y.transf.predict.elasticnet2 <- unlist(lapply(as.vector(y.predict.elasticnet2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.elasticnet2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-accelasticnet <- accuracy(y.transf.sample.elasticnet2, y.transf.predict.elasticnet2)
+for(j in 1: 100){
+  foldingelastic.net <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
+  for(i in 1:fold) {
+    idx.train<-foldingelastic.net$train[[i]]$idx
+    x.train<-df[idx.train,seleccion+2]
+    x.test<-df[-idx.train,seleccion+2]
+    
+    y.train<-df[idx.train,2]
+    y.test<-df[-idx.train,2]
+    
+    x.train.mean <- apply(x.train, 2, mean)
+    x.train.variances <- apply(x.train, 2, sd)
+    
+    x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
+    x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
+    x.train<-data.matrix(x.train)
+    
+    x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
+    x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
+    x.test<-data.matrix(x.test)
 
-for(i in 1:fold) {
-  idx.train<-folding$train[[i]]$idx
-  x.train<-df[idx.train,seleccion+2]
-  x.test<-df[-idx.train,seleccion+2]
-  
-  y.train<-df[idx.train,2]
-  y.test<-df[-idx.train,2]
-  
-  x.train.mean <- apply(x.train, 2, mean)
-  x.train.variances <- apply(x.train, 2, sd)
-  
-  x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
-  x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
-  x.train<-data.matrix(x.train)
-  
-  x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
-  x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
-  x.test<-data.matrix(x.test)
-  
-  
-  elasticnet.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.optimo2$lambda.min, alpha = cv.optimo2$alpha, standardize = FALSE)
-  
-  y.predict.elasticnet.test <- predict(elasticnet.model.train, x.test)
-  mse.test.elasticnet[i] <- mse(y.predict.elasticnet.test, y.test)
-  
-  y.trans.predict.elasticnet.test <- unlist(lapply(as.vector(y.predict.elasticnet.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.trans.sample.elasticnet.test <- unlist(lapply(y.test, function(x) continuous_transformation(x) ), use.names = FALSE)
-  accuracy.test.elasticnet[i] <- accuracy(y.trans.sample.elasticnet.test, y.trans.predict.elasticnet.test)
+    elasticnet.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.optimo2$lambda.min, alpha = cv.optimo2$alpha, standardize = FALSE)
+    
+    y.predict.elasticnet.test <- predict(elasticnet.model.train, x.test)
+    mse.test.elasticnet[i] <- mse(y.predict.elasticnet.test, y.test)
+    mse.test.total.elasticnet[i,j] <- mse(y.predict.elasticnet.test, y.test)
+  }
 }
+
+colMeans(mse.test.total.elasticnet)
+
+mean(colMeans(mse.test.total.elasticnet))
+
+sd(colMeans(mse.test.total.elasticnet))
+
 
 # BMA bic - GLM - test
 
+
 mse.test.bicbma<-matrix(0,fold,1)
 mse.test.bicbma2<-matrix(0,fold,1)
-accuracy.test.bicbma<-matrix(0,fold,1)
-accuracy.test.bicbma2<-matrix(0,fold,1)
+
+mse.test.total.bicbma2<-matrix(0,fold,100)
 
 bicbma.model2<-bic.glm(x.all, y.all, glm.family = gaussian(link = "identity"),maxCol=51,
                        strict = FALSE, OR = 20, OR.fix = 2, nbest = 10, occam.window = TRUE)
@@ -547,60 +543,55 @@ y.predict.bicbma22 <- cbind(matrix(1,dim(x.all)[1],1),x.all) %*% bicbma.model2$c
 msebicbma <- mse(y.predict.bicbma2, y.all)
 msebicbma2 <- mse(y.predict.bicbma22, y.all)
 
-y.transf.predict.bicbma2 <- unlist(lapply(as.vector(y.predict.bicbma2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.predict.bicbma22 <- unlist(lapply(as.vector(y.predict.bicbma22), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.bicbma2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-
-accbicbma <- accuracy(y.transf.sample.bicbma2, y.transf.predict.bicbma2)
-accbicbma2 <- accuracy(y.transf.sample.bicbma2, y.transf.predict.bicbma22)
-
-for(i in 1:fold) {
-  idx.train<-folding$train[[i]]$idx
-  x.train<-df[idx.train,seleccion+2]
-  x.test<-df[-idx.train,seleccion+2]
-  
-  y.train<-df[idx.train,2]
-  y.test<-df[-idx.train,2]
-  
-  x.train.mean <- apply(x.train, 2, mean)
-  x.train.variances <- apply(x.train, 2, sd)
-  
-  x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
-  x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
-  x.train<-data.matrix(x.train)
-  
-  x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
-  x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
-  x.test<-data.matrix(x.test)
-  
-  
-  bicbma.model.train<-bic.glm(x.train, y.train, glm.family = gaussian(link = "identity"),maxCol=51,
-                              strict = FALSE, OR = 20, OR.fix = 2, nbest = 10, occam.window = TRUE)
-  
-  y.predict.bicbma.test <- cbind(matrix(1,dim(x.test)[1],1),x.test) %*% bicbma.model.train$postmean
-  y.predict.bicbma2.test <- cbind(matrix(1,dim(x.test)[1],1),x.test) %*% bicbma.model.train$condpostmean
-  
-  mse.test.bicbma[i] <- mse(y.predict.bicbma.test, y.test)
-  mse.test.bicbma2[i] <- mse(y.predict.bicbma2.test, y.test)
-  
-  y.transf.predict.bicbma.test <- unlist(lapply(as.vector(y.predict.bicbma.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.transf.predict.bicbma2.test <- unlist(lapply(as.vector(y.predict.bicbma2.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.transf.sample.bicbma.test <- unlist(lapply(y.test, function(x) continuous_transformation(x) ), use.names = FALSE)
-  
-  accuracy.test.bicbma[i] <- accuracy(y.transf.sample.bicbma.test, y.transf.predict.bicbma.test)
-  accuracy.test.bicbma2[i] <- accuracy(y.transf.sample.bicbma.test, y.transf.predict.bicbma2.test)
+for (j in 1:100){
+  folding.bma <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
+  for(i in 1:fold) {
+    idx.train<-folding.bma$train[[i]]$idx
+    x.train<-df[idx.train,seleccion+2]
+    x.test<-df[-idx.train,seleccion+2]
+    
+    y.train<-df[idx.train,2]
+    y.test<-df[-idx.train,2]
+    
+    x.train.mean <- apply(x.train, 2, mean)
+    x.train.variances <- apply(x.train, 2, sd)
+    
+    x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
+    x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
+    x.train<-data.matrix(x.train)
+    
+    x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
+    x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
+    x.test<-data.matrix(x.test)
+    
+    
+    bicbma.model.train<-bic.glm(x.train, y.train, glm.family = gaussian(link = "identity"),maxCol=33,
+                                strict = FALSE, OR = 20, OR.fix = 2, nbest = 10, occam.window = TRUE)
+    
+    y.predict.bicbma.test <- cbind(matrix(1,dim(x.test)[1],1),x.test) %*% bicbma.model.train$postmean
+    y.predict.bicbma2.test <- cbind(matrix(1,dim(x.test)[1],1),x.test) %*% bicbma.model.train$condpostmean
+    
+    mse.test.bicbma[i] <- mse(y.predict.bicbma.test, y.test)
+    mse.test.bicbma2[i] <- mse(y.predict.bicbma2.test, y.test)
+    mse.test.total.bicbma2[i,j] <- mse(y.predict.bicbma2.test, y.test)
+  }
 }
+
+colMeans(mse.test.total.bicbma2)
+
+mean(colMeans(mse.test.total.bicbma2))
+
+sd(colMeans(mse.test.total.bicbma2))
 
 # resultados tabla final
 
-
-modelfinal<-c(mselasso,mseridge,mselasticnet,msebicbma,msebicbma2,acclasso,accridge,accelasticnet,accbicbma,accbicbma2)
-modelscv<-cbind(mse.test.lasso, mse.test.ridge, mse.test.elasticnet, mse.test.bicbma, mse.test.bicbma2,accuracy.test.lasso, accuracy.test.ridge, accuracy.test.elasticnet, accuracy.test.bicbma, accuracy.test.bicbma2)
+modelfinal<-c(mselasso,mseridge,mselasticnet,msebicbma,msebicbma2)
+modelscv<-cbind(mse.test.lasso,mse.test.ridge, mse.test.elasticnet, mse.test.bicbma, mse.test.bicbma2)
 meanmodelscv<-apply(modelscv, 2, mean)
 sdmodelscv<-apply(modelscv, 2, sd)
 tablafinal<-rbind(round(modelfinal,2),round(modelscv,2),round(meanmodelscv,2),round(sdmodelscv,2))
 rownames(tablafinal)<-c("Model_all","CV1","CV2","CV3","CV4","CV5","meanCV","sdCV")
-colnames(tablafinal)<-c("MSEL","MSER","MSEE","MSEB","MSEB2","ACCL","ACCR","ACCE","ACCB","ACCB2")
+colnames(tablafinal)<-c("MSEL","MSER","MSEE","MSEB","MSEB2")
 
 #resultados finales
 tablafinal
@@ -626,6 +617,7 @@ modelsf
 summary(bicbma.model2)
 
 # medias x.all
+
 x.all.mean <- apply(df[,seleccion+2], 2, mean)
 
 # varianzas x.all
