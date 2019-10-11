@@ -477,7 +477,6 @@ sd(colMeans(mse.test.total.ridge))
 
 # elasticnet test
 mse.test.elasticnet<-matrix(0,fold,1)
-accuracy.test.elasticnet<-matrix(0,fold,1)
 mse.test.total.elasticnet<-matrix(0,fold,100)
 
 a <- seq(0.1, 0.9, 0.05)
@@ -490,7 +489,6 @@ elasticnet.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.optim
 
 y.predict.elasticnet2 <- predict(elasticnet.model2, x.all)
 mselasticnet <- mse(y.predict.elasticnet2, y.all)
-
 
 for(j in 1: 100){
   foldingelastic.net <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
@@ -512,8 +510,7 @@ for(j in 1: 100){
     x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
     x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
     x.test<-data.matrix(x.test)
-    
-    
+
     elasticnet.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.optimo2$lambda.min, alpha = cv.optimo2$alpha, standardize = FALSE)
     
     y.predict.elasticnet.test <- predict(elasticnet.model.train, x.test)
@@ -536,9 +533,6 @@ mse.test.bicbma<-matrix(0,fold,1)
 mse.test.bicbma2<-matrix(0,fold,1)
 
 mse.test.total.bicbma2<-matrix(0,fold,100)
-
-accuracy.test.bicbma<-matrix(0,fold,1)
-accuracy.test.bicbma2<-matrix(0,fold,1)
 
 bicbma.model2<-bic.glm(x.all, y.all, glm.family = gaussian(link = "identity"),maxCol=51,
                        strict = FALSE, OR = 20, OR.fix = 2, nbest = 10, occam.window = TRUE)
@@ -591,14 +585,13 @@ sd(colMeans(mse.test.total.bicbma2))
 
 # resultados tabla final
 
-
-modelfinal<-c(mseridge,mselasticnet,msebicbma,msebicbma2)
-modelscv<-cbind(mse.test.ridge, mse.test.elasticnet, mse.test.bicbma, mse.test.bicbma2,accuracy.test.lasso)
+modelfinal<-c(mselasso,mseridge,mselasticnet,msebicbma,msebicbma2)
+modelscv<-cbind(mse.test.lasso,mse.test.ridge, mse.test.elasticnet, mse.test.bicbma, mse.test.bicbma2)
 meanmodelscv<-apply(modelscv, 2, mean)
 sdmodelscv<-apply(modelscv, 2, sd)
 tablafinal<-rbind(round(modelfinal,2),round(modelscv,2),round(meanmodelscv,2),round(sdmodelscv,2))
 rownames(tablafinal)<-c("Model_all","CV1","CV2","CV3","CV4","CV5","meanCV","sdCV")
-colnames(tablafinal)<-c("MSER","MSEE","MSEB","MSEB2")
+colnames(tablafinal)<-c("MSEL","MSER","MSEE","MSEB","MSEB2")
 
 #resultados finales
 tablafinal
