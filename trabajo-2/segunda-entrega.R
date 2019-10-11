@@ -378,16 +378,11 @@ seleccion<-c(6,7,11,15,49)
 fold<-5
 folding <- modelr::crossv_kfold(df[,c(2,seleccion+2)],k=fold)
 
-continuous_transformation <- function(x) {
-  if (x <= -1) {0} else {1}
-}
-
 y.all <- df[,2]
 x.all <- scale(df[,seleccion+2])
 
 # lasso test
 mse.test.lasso<-matrix(0,fold,1)
-accuracy.test.lasso<-matrix(0,fold,1)
 
 cv.lasso2 <- cv.glmnet(x.all, y.all, family = "gaussian", nfold = fold, type.measure = "mse", parallel = TRUE, alpha = 1,standardize = FALSE)
 lasso.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
@@ -395,43 +390,36 @@ lasso.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.lasso2$lam
 y.predict.lasso2 <- predict(lasso.model2, x.all)
 mselasso <- mse(y.predict.lasso2, y.all)
 
-y.transf.predict.lasso2 <- unlist(lapply(as.vector(y.predict.lasso2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.lasso2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-acclasso <- accuracy(y.transf.sample.lasso2, y.transf.predict.lasso2)
-
-for(i in 1:fold) {
-  idx.train<-folding$train[[i]]$idx
-  x.train<-df[idx.train,seleccion+2]
-  x.test<-df[-idx.train,seleccion+2]
-  
-  y.train<-df[idx.train,2]
-  y.test<-df[-idx.train,2]
-  
-  x.train.mean <- apply(x.train, 2, mean)
-  x.train.variances <- apply(x.train, 2, sd)
-  
-  x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
-  x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
-  x.train<-data.matrix(x.train)
-  
-  x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
-  x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
-  x.test<-data.matrix(x.test)
-  
-  
-  lasso.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
-  
-  y.predict.lasso.test <- predict(lasso.model.train, x.test)
-  mse.test.lasso[i] <- mse(y.predict.lasso.test, y.test)
-  
-  y.trans.predict.lasso.test <- unlist(lapply(as.vector(y.predict.lasso.test), function(x) continuous_transformation(x) ), use.names = FALSE)
-  y.trans.sample.lasso.test <- unlist(lapply(y.test, function(x) continuous_transformation(x) ), use.names = FALSE)
-  accuracy.test.lasso[i] <- accuracy(y.trans.sample.lasso.test, y.trans.predict.lasso.test)
+for (j in 1: 100) {
+  for(i in 1:fold) {
+    idx.train<-folding$train[[i]]$idx
+    x.train<-df[idx.train,seleccion+2]
+    x.test<-df[-idx.train,seleccion+2]
+    
+    y.train<-df[idx.train,2]
+    y.test<-df[-idx.train,2]
+    
+    x.train.mean <- apply(x.train, 2, mean)
+    x.train.variances <- apply(x.train, 2, sd)
+    
+    x.train<-sweep(x.train, 2, x.train.mean, FUN="-")
+    x.train<-sweep(x.train, 2, x.train.variances, FUN="/")
+    x.train<-data.matrix(x.train)
+    
+    x.test<-sweep(x.test, 2, x.train.mean, FUN="-")
+    x.test<-sweep(x.test, 2, x.train.variances, FUN="/")
+    x.test<-data.matrix(x.test)
+    
+    lasso.model.train <- glmnet(x.train, y.train, family = "gaussian", lambda = cv.lasso2$lambda.min, alpha = 1,standardize = FALSE)
+    
+    y.predict.lasso.test <- predict(lasso.model.train, x.test)
+    mse.test.lasso[i] <- mse(y.predict.lasso.test, y.test)
+  }
 }
 
 # ridge test
 mse.test.ridge<-matrix(0,fold,1)
-accuracy.test.ridge<-matrix(0,fold,1)
+#accuracy.test.ridge<-matrix(0,fold,1)
 
 cv.ridge2 <- cv.glmnet(x.all, y.all, family = "gaussian", nfold = fold, type.measure = "mse", parallel = TRUE, alpha = 0,standardize = FALSE)
 ridge.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.ridge2$lambda.min, alpha = 0,standardize = FALSE)
@@ -439,9 +427,9 @@ ridge.model2 <- glmnet(x.all, y.all, family = "gaussian", lambda = cv.ridge2$lam
 y.predict.ridge2 <- predict(ridge.model2, x.all)
 mseridge <- mse(y.predict.ridge2, y.all)
 
-y.transf.predict.ridge2 <- unlist(lapply(as.vector(y.predict.ridge2), function(x) continuous_transformation(x) ), use.names = FALSE)
-y.transf.sample.ridge2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
-accridge <- accuracy(y.transf.sample.ridge2, y.transf.predict.ridge2)
+# y.transf.predict.ridge2 <- unlist(lapply(as.vector(y.predict.ridge2), function(x) continuous_transformation(x) ), use.names = FALSE)
+# y.transf.sample.ridge2 <- unlist(lapply(y.all, function(x) continuous_transformation(x) ), use.names = FALSE)
+# accridge <- accuracy(y.transf.sample.ridge2, y.transf.predict.ridge2)
 
 for(i in 1:fold) {
   idx.train<-folding$train[[i]]$idx
