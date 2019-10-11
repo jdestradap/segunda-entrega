@@ -312,15 +312,6 @@ models<-data.frame(t(models))
 models
 models.validation
 
-write.xlsx(models, file = "empty1.xlsx",
-           sheetName = "USA-ARRESTS", append = FALSE)
-
-# ante diferentes corridas los modelos son muy diferentes e igualmente los resultados.
-
-# seleccion de variables -------------------------------------------
-
-# particionamos la muestra para buscar consistencia en las variables con PIP > 0.5 con bic.glm para el proceso de seleccion de variables
-
 pip<-matrix(0,50,5)
 for(i in 1:5) {
   ind_train <- sample(1:nrow(df), size = round(0.8*nrow(df)))
@@ -380,7 +371,7 @@ coef(ridge.model.pre)
 
 #  variables definitivas PIP ------------------------------------------
 
-seleccion<-c(23,25,31)
+seleccion<-c(6,7,11,15,49)
 
 #### Cross Validation modelos definitivos
 
