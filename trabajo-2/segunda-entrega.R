@@ -617,6 +617,7 @@ modelsf
 summary(bicbma.model2)
 
 # medias x.all
+
 x.all.mean <- apply(df[,seleccion+2], 2, mean)
 
 # varianzas x.all
